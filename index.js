@@ -2,7 +2,7 @@
 const async = require('async');
 const AWS = require('aws-sdk');
 const moment = require('moment-timezone');
-const AWSRegionName = 'us-east-1';
+const AWSRegionName = 'eu-west-1';
 
 const ec2 = new AWS.EC2({
     region: AWSRegionName,
@@ -46,6 +46,7 @@ exports.handler = (event, context, callback) => {
          * @returns Array object of ec2 instances
          */
         function (done) {
+            console.log(TagName);
             let params = {
                 Filters: [{
                     Name: 'tag:' + TagName,
@@ -61,6 +62,7 @@ exports.handler = (event, context, callback) => {
                     done(err, null);
                 }
                 else {
+                    console.log(data);
                     done(null, data);
                 }
             });
@@ -75,6 +77,7 @@ exports.handler = (event, context, callback) => {
         
         function (instances, done) {
             console.log('Calculating number of instances...');
+            console.log(instances);
             if (instances && instances.Reservations.length > 0) {
                 var ec2Instances = [];
                 async.map(instances.Reservations, (instance, done1) => {
@@ -117,9 +120,9 @@ exports.handler = (event, context, callback) => {
                     console.log('Creating Image for ::', instanceId);
                     let params = {
                         InstanceId: instanceId,
-                        Name: 'AMI_' + instanceId + '_' + moment.tz(new Date(), "Asia/Kolkata").add(RETENTION_TIME, RETENTION_TYPE).valueOf().toString(),
+                        Name: 'AMI_' + instanceId + '_' + moment.tz(new Date(), "Europe/Rome").add(RETENTION_TIME, RETENTION_TYPE).valueOf().toString(),
                         Description: 'This is an AMI of ' + instanceId + '. Created on : ' + new Date().getTime(),
-                        NoReboot: false
+                        NoReboot: true
                     };
                     ec2.createImage(params, function (err, data) {
                         if (err) {
@@ -140,7 +143,7 @@ exports.handler = (event, context, callback) => {
                             });
                             Tags.push({
                                 Key: 'isExpireOn',
-                                Value: moment.tz("Asia/Kolkata").add(RETENTION_TIME, RETENTION_TYPE).valueOf().toString()
+                                Value: moment.tz("Europe/Rome").add(RETENTION_TIME, RETENTION_TYPE).valueOf().toString()
                             });
                             var tagparams = {
                                 Resources: [data.ImageId],
@@ -208,9 +211,10 @@ exports.handler = (event, context, callback) => {
             console.log('Total AMIs :', images.Images.length);
             async.map(images.Images, (image, done1) => {
                 if (image) {
+                    console.log(image);
                     var imageName = image.Name;
                     var ExpireTimestamp = imageName.replace(/_/g, " ").split(" ");
-                    var currentTimestamp = moment.tz(new Date(), "Asia/Kolkata").valueOf();
+                    var currentTimestamp = moment.tz(new Date(), "Europe/Rome").valueOf();
                     if (ExpireTimestamp[2] < currentTimestamp) {
                         var imageDelete = {};
                         imageDelete['ImageId'] = image.ImageId;
@@ -221,7 +225,7 @@ exports.handler = (event, context, callback) => {
                             else {
                                 console.log('Image id ' + image.ImageId + ' Deregistered');
                                 async.map(image.BlockDeviceMappings, (snapShot, done2) => {
-                                    if (snapShot.Ebs) {
+                                    if (snapShot.Ebs && snapShot.Ebs.SnapshotId) {
                                         var snapparams = {
                                             SnapshotId: snapShot.Ebs.SnapshotId
                                         };
